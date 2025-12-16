@@ -10,8 +10,17 @@ const LIVE_BETS_KEY = 'stockgrow_live_bets'; // Shared state for live bets
 const OTP_STORAGE_KEY = 'stockgrow_temp_otp'; // Temporary OTP storage
 const MASTER_OTP = '786786'; // Backup Code
 
+// --- CLOUD SYNC CONFIGURATION (JSONBin.io) ---
+// Instructions:
+// 1. Go to jsonbin.io -> Login -> Create Bin -> Paste "{}" -> Copy BIN ID
+// 2. Go to API Keys -> Create Key -> Copy X-Master-Key
+export const CLOUD_CONFIG = {
+  ENABLED: true, // Set to true to enable Cloud Sync
+  BIN_ID: "67c9c0f9ad19ca34f816fc0c", // Keep your Bin ID (Make sure this exists in your JSONBin dashboard)
+  API_KEY: "$2a$10$0wgM8VyupCO/KpIN6SIMG.m8.GfnjmyV5xw1C/zMvfBPvL6G7qggi" // UPDATED KEY FROM SCREENSHOT
+};
+
 // --- WHATSAPP API CONFIGURATION (UltraMsg) ---
-// Configured with credentials provided by user
 const WA_API_CONFIG = {
   ENABLED: true, 
   INSTANCE_ID: "instance156220", 
@@ -25,6 +34,62 @@ interface DatabaseSchema {
   news?: NewsItem[];
   tickets?: SupportTicket[];
 }
+
+// --- CLOUD HELPER FUNCTIONS ---
+
+export const fetchCloudData = async (): Promise<boolean> => {
+    if (!CLOUD_CONFIG.ENABLED || !CLOUD_CONFIG.BIN_ID || !CLOUD_CONFIG.API_KEY) return false;
+
+    try {
+        console.log("☁️ Syncing from Cloud...");
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${CLOUD_CONFIG.BIN_ID}`, {
+            method: 'GET',
+            headers: {
+                'X-Master-Key': CLOUD_CONFIG.API_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            // Check specifically for 404 (Bin Not Found) or 401 (Unauthorized)
+            if (response.status === 404) console.warn("Cloud Bin Not Found. Check BIN_ID.");
+            if (response.status === 401) console.warn("Invalid API Key.");
+            return false; // Fail silently, use local data
+        }
+
+        const result = await response.json();
+        // JSONBin wraps data in 'record'
+        const cloudData = result.record; 
+
+        if (cloudData && Array.isArray(cloudData.users)) {
+             localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudData));
+             window.dispatchEvent(new Event('storage-update'));
+             console.log("✅ Cloud Data Restored");
+             return true;
+        }
+        return false;
+    } catch (error) {
+        console.warn("Offline Mode: Using Local Data"); // Don't error out, just warn
+        return false;
+    }
+};
+
+const pushToCloud = async (data: DatabaseSchema) => {
+    if (!CLOUD_CONFIG.ENABLED || !CLOUD_CONFIG.BIN_ID || !CLOUD_CONFIG.API_KEY) return;
+
+    // Fire and forget - don't await to keep app fast
+    fetch(`https://api.jsonbin.io/v3/b/${CLOUD_CONFIG.BIN_ID}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': CLOUD_CONFIG.API_KEY
+        },
+        body: JSON.stringify(data)
+    }).then(res => {
+        if(res.ok) console.log("☁️ Saved to Cloud");
+        else console.warn("Cloud Save Failed (Check Key/ID)");
+    }).catch(err => console.warn("Offline: Data saved locally only"));
+};
 
 // --- HELPERS ---
 const getDB = (): DatabaseSchema => {
@@ -45,6 +110,8 @@ const getDB = (): DatabaseSchema => {
 const saveDB = (db: DatabaseSchema) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   window.dispatchEvent(new Event('storage-update'));
+  // Trigger Cloud Backup
+  pushToCloud(db);
 };
 
 const normalizeMobile = (mobile: string): string => {

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { Home, PieChart, Newspaper, Wallet, User as UserIcon, Shield } from 'lucide-react';
+import { Home, PieChart, Newspaper, Wallet, User as UserIcon, Shield, Cloud, WifiOff } from 'lucide-react';
 import { AuthState, User } from './types';
-import { getCurrentUser, subscribeToAuth } from './services/backend';
+import { getCurrentUser, subscribeToAuth, fetchCloudData } from './services/backend';
 
 // Pages
 import AuthPage from './pages/AuthPage';
@@ -87,9 +87,22 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    // 1. Initial Local Load
+    setUser(getCurrentUser());
+    setLoading(false);
+
+    // 2. Cloud Sync (Background - Silent)
+    // We don't block UI for this anymore to prevent "Loading" stuck issues.
+    const runCloudSync = async () => {
+       await fetchCloudData();
+       // Refresh user after sync in case data changed
+       setUser(getCurrentUser());
+    };
+    runCloudSync();
+
+    // 3. Subscribe to changes
     const unsubscribe = subscribeToAuth((u) => {
       setUser(u);
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
