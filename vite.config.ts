@@ -6,8 +6,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // This prevents "process is not defined" error in browser
-    'process.env': {}
+    // This handles the variable globally so the app doesn't crash on load
+    'process.env': {} 
   },
   build: {
     outDir: 'dist',
