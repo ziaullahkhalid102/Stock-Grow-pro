@@ -7,6 +7,16 @@ const STORAGE_KEY = 'stockgrow_data_master_v3'; // Main Database
 const SESSION_KEY = 'stockgrow_session_mobile_v2'; // Current User
 const GAME_SEQ_KEY = 'stockgrow_game_sequence'; // Admin controlled results
 const LIVE_BETS_KEY = 'stockgrow_live_bets'; // Shared state for live bets
+const OTP_STORAGE_KEY = 'stockgrow_temp_otp'; // Temporary OTP storage
+const MASTER_OTP = '786786'; // Backup Code
+
+// --- WHATSAPP API CONFIGURATION (UltraMsg) ---
+// Configured with credentials provided by user
+const WA_API_CONFIG = {
+  ENABLED: true, 
+  INSTANCE_ID: "instance156220", 
+  TOKEN: "zzf5wlnwloyskbfy" 
+};
 
 // --- TYPES ---
 interface DatabaseSchema {
@@ -52,6 +62,113 @@ function generateRandomSequence(length: number): ('DRAGON' | 'TIGER' | 'TIE')[] 
   }
   return results;
 }
+
+// --- AUTOMATIC WHATSAPP SENDER ---
+const sendWhatsAppMessage = async (mobile: string, message: string) => {
+  if (!WA_API_CONFIG.ENABLED) return false;
+
+  try {
+    // Formatting mobile for International format (+923001234567)
+    let formattedNum = mobile;
+    
+    // Remove all non-digits first
+    formattedNum = formattedNum.replace(/\D/g, '');
+
+    // Convert 03... to 923...
+    if (formattedNum.startsWith('03')) {
+        formattedNum = '92' + formattedNum.substring(1);
+    }
+    
+    const url = `https://api.ultramsg.com/${WA_API_CONFIG.INSTANCE_ID}/messages/chat`;
+    
+    const params = new URLSearchParams();
+    params.append('token', WA_API_CONFIG.TOKEN);
+    params.append('to', formattedNum); 
+    params.append('body', message);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+    
+    const data = await response.json();
+    console.log("UltraMsg Response:", data);
+    return data.sent === "true" || data.sent === true;
+  } catch (error) {
+    console.error("WhatsApp API Error:", error);
+    return false;
+  }
+};
+
+// --- OTP SYSTEM ---
+
+export const sendMockOTP = async (mobile: string, isResetMode: boolean = false): Promise<boolean> => {
+  const db = getDB();
+  const normalizedMobile = normalizeMobile(mobile);
+  
+  const userExists = db.users.find(u => u.mobile === normalizedMobile);
+
+  if (isResetMode) {
+      if (!userExists) throw new Error("This number is not registered.");
+  } else {
+      if (userExists) throw new Error("This number is already registered. Please Login.");
+  }
+
+  // 1. Generate Code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // 2. Save Code
+  const otpData = { mobile: normalizedMobile, code, expires: Date.now() + 300000 }; // 5 mins
+  localStorage.setItem(OTP_STORAGE_KEY, JSON.stringify(otpData));
+
+  // 3. Send via Automatic API
+  const message = isResetMode 
+    ? `*StockGrow Password Reset*\n\nYour OTP is: *${code}*\n\nUse this to reset your password.`
+    : `*StockGrow Verification Code*\n\nYour OTP is: *${code}*\n\nUse this code to verify your account.`;
+  
+  console.log(`[SYSTEM] Generated OTP: ${code} for ${normalizedMobile}`);
+
+  if (WA_API_CONFIG.ENABLED) {
+      // Real Automatic Mode
+      const sent = await sendWhatsAppMessage(normalizedMobile, message);
+      if (sent) {
+          return true;
+      } else {
+        // Fallback if API fails (rare)
+        console.warn("API Failed, falling back to Alert");
+        alert(`[Network Error]\nCould not send SMS via API.\n\nFor testing, your OTP is: ${code}`);
+        return true;
+      }
+  } else {
+      // Demo Mode (Free)
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          alert(`[STOCKGROW AUTOMATIC SMS]\n\nYour OTP Code is: ${code}`);
+          resolve(true);
+        }, 1500);
+      });
+  }
+};
+
+export const verifyMockOTP = async (mobile: string, code: string): Promise<boolean> => {
+  // Allow Master OTP (Admin Override)
+  if (code === MASTER_OTP) return true;
+
+  const data = localStorage.getItem(OTP_STORAGE_KEY);
+  if (!data) throw new Error("Please request OTP first.");
+  
+  const parsed = JSON.parse(data);
+  const normalizedMobile = normalizeMobile(mobile);
+
+  if (parsed.mobile !== normalizedMobile) throw new Error("Mobile number mismatch.");
+  if (Date.now() > parsed.expires) throw new Error("OTP Expired. Request again.");
+  
+  if (parsed.code !== code) throw new Error("Invalid OTP Code.");
+
+  localStorage.removeItem(OTP_STORAGE_KEY);
+  return true;
+};
 
 // --- NEWS SYSTEM ---
 
@@ -351,11 +468,27 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
   };
 };
 
+// Updated: Initiates the process, doesn't actually reset.
 export const resetPassword = async (mobile: string) => {
   const db = getDB();
   const user = db.users.find(u => u.mobile === normalizeMobile(mobile));
   if(!user) throw new Error("Account not found");
   return true;
+};
+
+// New: Actually updates password after OTP
+export const confirmPasswordReset = async (mobile: string, newPass: string) => {
+    const db = getDB();
+    const normalizedMobile = normalizeMobile(mobile);
+    const user = db.users.find(u => u.mobile === normalizedMobile);
+    
+    if (!user) throw new Error("User not found");
+    if (newPass.length < 6) throw new Error("Password too short");
+
+    // @ts-ignore
+    user._password = newPass.trim();
+    saveDB(db);
+    return true;
 };
 
 export const buyPlan = async (planId: string): Promise<void> => {
@@ -418,7 +551,7 @@ export const buyPlan = async (planId: string): Promise<void> => {
   saveDB(db);
 };
 
-export const processDeposit = async (amount: number, method: string): Promise<void> => {
+export const processDeposit = async (amount: number, method: string, trxId?: string, senderMobile?: string): Promise<void> => {
   const db = getDB();
   const mobile = localStorage.getItem(SESSION_KEY);
   if (!mobile) throw new Error("Not logged in");
@@ -432,7 +565,9 @@ export const processDeposit = async (amount: number, method: string): Promise<vo
     amount: Number(amount), 
     method,
     date: new Date().toISOString(),
-    status: 'PENDING'
+    status: 'PENDING',
+    trxId: trxId || '',
+    senderMobile: senderMobile || ''
   };
 
   user.transactions.push(tx);

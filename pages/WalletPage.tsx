@@ -64,7 +64,7 @@ export default function WalletPage() {
         const cleanTrx = trxId.replace(/\s/g, '');
         const cleanSender = senderNum.replace(/\D/g, ''); 
 
-        if (cleanTrx.length < 11) throw new Error("Invalid TRX ID.");
+        if (cleanTrx.length < 5) throw new Error("Invalid TRX ID.");
 
         if (method === 'JazzCash' || method === 'Easypaisa') {
             if (!/^\d{11}$/.test(cleanSender)) {
@@ -74,7 +74,7 @@ export default function WalletPage() {
             if (cleanSender.length < 10) throw new Error("Invalid Bank Account Number.");
         }
         
-        await processDeposit(Number(amount), method);
+        await processDeposit(Number(amount), method, cleanTrx, cleanSender);
         setSuccessMsg('Deposit request submitted! Wait for Admin Verification.');
         setFilter('DEPOSIT');
 
@@ -302,8 +302,6 @@ export default function WalletPage() {
 
       {(mode === 'DEPOSIT' || mode === 'WITHDRAW') && (
         <div className="bg-surface border border-slate-800 rounded-2xl p-6 shadow-xl animate-slide-up">
-           {/* Same Form Logic as before... */}
-           {/* Keeping existing form rendering to save space, assuming it's correctly preserved */}
            <h2 className="text-xl font-bold text-white mb-6">
             {mode === 'DEPOSIT' ? 'Add Funds' : 'Withdraw Funds'}
           </h2>

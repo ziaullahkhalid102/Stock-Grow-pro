@@ -29,6 +29,8 @@ export interface Transaction {
   method: string;
   date: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  trxId?: string; // Real Transaction ID from user
+  senderMobile?: string; // Sender number
 }
 
 export interface NewsItem {

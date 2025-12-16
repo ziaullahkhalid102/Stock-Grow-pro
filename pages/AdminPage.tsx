@@ -32,6 +32,9 @@ export default function AdminPage() {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
 
+  // Success Modal
+  const [successModal, setSuccessModal] = useState<{show: boolean, data: any}>({show: false, data: null});
+
   useEffect(() => {
     const user = getCurrentUser();
     if (!user || user.mobile !== '03281614102') {
@@ -43,11 +46,11 @@ export default function AdminPage() {
 
     // Polling for updates
     const interval = setInterval(() => {
-        if(!replyingTo) fetchData(true); 
+        if(!replyingTo && !successModal.show) fetchData(true); 
     }, 3000); 
 
     return () => clearInterval(interval);
-  }, [replyingTo]);
+  }, [replyingTo, successModal.show]);
 
   const fetchData = async (silent = false) => {
     if(!silent) setLoading(true);
@@ -149,10 +152,33 @@ export default function AdminPage() {
     setActionLoading(tx.id);
     try {
         if (type === 'DEPOSIT') {
-            if (action === 'APPROVE') await approveDeposit(tx.userId, tx.id, tx.amount);
+            if (action === 'APPROVE') {
+                await approveDeposit(tx.userId, tx.id, tx.amount);
+                // Show Success Modal
+                setSuccessModal({
+                    show: true,
+                    data: {
+                        type: 'DEPOSIT',
+                        amount: tx.amount,
+                        user: tx.userName,
+                        id: tx.trxId || tx.id
+                    }
+                });
+            }
             else await rejectDeposit(tx.userId, tx.id);
         } else {
-             if (action === 'APPROVE') await approveWithdrawal(tx.userId, tx.id);
+             if (action === 'APPROVE') {
+                 await approveWithdrawal(tx.userId, tx.id);
+                 setSuccessModal({
+                    show: true,
+                    data: {
+                        type: 'WITHDRAW',
+                        amount: tx.amount,
+                        user: tx.userName,
+                        id: tx.id
+                    }
+                });
+             }
              else await rejectWithdrawal(tx.userId, tx.id, tx.amount);
         }
         await fetchData(true); 
@@ -212,8 +238,7 @@ export default function AdminPage() {
     if(fileInputRef.current) fileInputRef.current.value = ''; 
   };
 
-  // FETCH ALL TRANSACTIONS (Sorted by date, newest first)
-  // We include ALL transactions to show history
+  // FETCH ALL TRANSACTIONS
   const allDeposits = users.flatMap(u => (u.transactions || []).filter(t => t.type === 'DEPOSIT').map(t => ({ ...t, userId: u.id, userName: u.name, userMobile: u.mobile }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const allWithdrawals = users.flatMap(u => (u.transactions || []).filter(t => t.type === 'WITHDRAW').map(t => ({ ...t, userId: u.id, userName: u.name, userMobile: u.mobile }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -454,8 +479,17 @@ export default function AdminPage() {
                    <div className="bg-black/40 rounded-lg p-3 ml-3 border border-white/5 space-y-2 mb-5">
                        <div className="flex justify-between items-center text-sm">
                            <span className="text-slate-500 flex items-center"><FileText size={14} className="mr-2"/> TRX ID</span>
-                           <span className="text-neonBlue font-mono font-bold">{tx.id}</span>
+                           <span className="text-neonBlue font-mono font-bold tracking-wider">{tx.trxId || tx.id}</span>
                        </div>
+                       {tx.senderMobile && (
+                           <>
+                               <div className="w-full h-px bg-white/5"></div>
+                               <div className="flex justify-between items-center text-sm">
+                                   <span className="text-slate-500 flex items-center"><Smartphone size={14} className="mr-2"/> Sender</span>
+                                   <span className="text-white">{tx.senderMobile}</span>
+                               </div>
+                           </>
+                       )}
                        <div className="w-full h-px bg-white/5"></div>
                        <div className="flex justify-between items-center text-sm">
                            <span className="text-slate-500 flex items-center"><CreditCard size={14} className="mr-2"/> Method</span>
@@ -641,6 +675,32 @@ export default function AdminPage() {
                  <button onClick={() => setEditingUser(null)} className="flex-1 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold">Cancel</button>
                  <button onClick={saveUserChanges} className="flex-1 py-2 bg-neonBlue text-black rounded-lg text-sm font-bold">Save Changes</button>
               </div>
+           </div>
+        </div>
+      )}
+
+      {/* --- SUCCESS MODAL --- */}
+      {successModal.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+           <div className="bg-slate-900 border-2 border-green-500 w-full max-w-sm rounded-3xl p-8 text-center relative shadow-[0_0_50px_rgba(34,197,94,0.3)]">
+               <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce">
+                  <Check size={40} className="text-black stroke-[3]" />
+               </div>
+               <h2 className="text-3xl font-black text-white mb-2">Payment Confirmed!</h2>
+               <p className="text-slate-400 text-sm mb-6">Money has been transferred to user's wallet successfully.</p>
+               
+               <div className="bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-700">
+                  <p className="text-xs text-slate-500 uppercase font-bold mb-1">Amount Added</p>
+                  <p className="text-3xl font-bold text-green-500">Rs.{successModal.data?.amount?.toLocaleString()}</p>
+                  <p className="text-xs text-white mt-2">To: <span className="text-neonBlue">{successModal.data?.user}</span></p>
+               </div>
+               
+               <button 
+                  onClick={() => setSuccessModal({show: false, data: null})}
+                  className="w-full py-4 bg-green-500 text-black font-black text-lg rounded-xl hover:bg-green-400 transition-transform hover:scale-[1.02] shadow-lg"
+               >
+                  DONE
+               </button>
            </div>
         </div>
       )}

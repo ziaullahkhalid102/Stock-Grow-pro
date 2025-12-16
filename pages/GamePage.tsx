@@ -15,7 +15,6 @@ const CHIPS = [10, 50, 100, 500, 1000];
 // Asset URLs
 const DRAGON_IMG = "https://cdn-icons-png.flaticon.com/512/4712/4712808.png";
 const TIGER_IMG = "https://cdn-icons-png.flaticon.com/512/3755/3755307.png";
-const FIRE_GIF = "https://media.giphy.com/media/26tPlO25Ah0V4YdGx/giphy.gif"; 
 
 // --- EXPANDED BOTS DATA (12 Players) ---
 const BOTS = [
@@ -415,15 +414,16 @@ export default function GamePage() {
              </div>
          )}
 
-         {/* --- BETTING TABLE (COMPACT) --- */}
-         <div className="relative z-10 flex-1 px-14 grid grid-cols-3 gap-1.5 pb-2 items-end">
+         {/* --- BETTING TABLE (UPDATED DESIGN: LARGE & EQUAL) --- */}
+         <div className="relative z-10 flex-1 px-4 grid grid-cols-3 gap-1 pb-2 items-end">
              
              {/* DRAGON BOX */}
              <div 
                 onClick={() => placeBet('DRAGON')}
-                className={`relative h-40 rounded-tl-2xl rounded-bl-xl border-2 flex flex-col items-center justify-between py-2 cursor-pointer active:scale-95 transition-all overflow-hidden group
-                    ${winner === 'DRAGON' ? 'border-red-500 bg-red-900/40' : 'border-red-600/40 bg-gradient-to-b from-red-950/80 to-black/80'}`}
+                className={`relative h-48 rounded-l-xl border-2 flex flex-col items-center justify-start pt-4 cursor-pointer active:scale-95 transition-all overflow-hidden group
+                    ${winner === 'DRAGON' ? 'border-red-500 bg-red-900/60' : 'border-red-600/40 bg-gradient-to-b from-red-950/90 to-black/90'}`}
              >
+                 {/* Visual Chips Overlay */}
                  <div className="absolute inset-0 z-0">
                      {visualChips.filter(c => c.target === 'DRAGON').map(c => (
                          <div key={c.id} className="absolute w-5 h-5 rounded-full bg-yellow-400 border border-white/50 shadow-md flex items-center justify-center text-[6px] font-bold text-black pointer-events-none"
@@ -433,25 +433,29 @@ export default function GamePage() {
                      ))}
                  </div>
 
-                 <h2 className="text-red-100 font-black text-lg uppercase drop-shadow-md z-10 tracking-widest">Dragon</h2>
-                 <p className="text-red-400 text-xs font-black z-10 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm">1:2</p>
+                 <h2 className="text-red-100 font-black text-xl uppercase drop-shadow-md z-10 tracking-widest">Dragon</h2>
+                 <p className="text-red-400 text-xs font-black z-10 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm mt-1">1:2</p>
                  
-                 <div className="bg-black/60 px-2 py-1 rounded border border-red-500/30 text-white font-mono text-[10px] z-10 flex items-center backdrop-blur-sm w-11/12 justify-center">
-                    <Users size={8} className="mr-1 text-red-500"/> {bets.DRAGON.toLocaleString()}
-                 </div>
-
+                 {/* MY BET DISPLAY (LARGE) */}
                  {myBets.DRAGON > 0 && (
-                     <div className="absolute top-1 right-1 bg-green-500 text-white px-1.5 rounded-md text-[9px] font-bold shadow-lg z-20 border border-white/20">
-                         +{myBets.DRAGON}
+                     <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                         <div className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] stroke-black" style={{textShadow: '0 0 10px rgba(220, 38, 38, 0.8)'}}>
+                             {myBets.DRAGON}
+                         </div>
                      </div>
                  )}
+
+                 {/* Total Bets */}
+                 <div className="absolute bottom-2 bg-black/60 px-2 py-1 rounded border border-red-500/30 text-white font-mono text-[10px] z-10 flex items-center backdrop-blur-sm w-11/12 justify-center">
+                    <Users size={8} className="mr-1 text-red-500"/> {bets.DRAGON.toLocaleString()}
+                 </div>
              </div>
 
              {/* TIE BOX */}
              <div 
                 onClick={() => placeBet('TIE')}
-                className={`relative h-32 self-center border-y-2 border-x rounded-lg flex flex-col items-center justify-between py-2 cursor-pointer active:scale-95 transition-all overflow-hidden group
-                    ${winner === 'TIE' ? 'border-green-500 bg-green-900/40' : 'border-green-600/40 bg-gradient-to-b from-green-950/80 to-black/80'}`}
+                className={`relative h-48 border-y-2 border-x-2 flex flex-col items-center justify-start pt-4 cursor-pointer active:scale-95 transition-all overflow-hidden group
+                    ${winner === 'TIE' ? 'border-green-500 bg-green-900/60' : 'border-green-600/40 bg-gradient-to-b from-green-950/90 to-black/90'}`}
              >
                  <div className="absolute inset-0 z-0">
                      {visualChips.filter(c => c.target === 'TIE').map(c => (
@@ -462,25 +466,28 @@ export default function GamePage() {
                      ))}
                  </div>
 
-                 <h2 className="text-green-100 font-black text-base uppercase drop-shadow-md z-10">Tie</h2>
-                 <p className="text-green-400 text-xs font-black z-10 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm">1:9</p>
+                 <h2 className="text-green-100 font-black text-xl uppercase drop-shadow-md z-10">Tie</h2>
+                 <p className="text-green-400 text-xs font-black z-10 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm mt-1">1:9</p>
                  
-                 <div className="bg-black/60 px-1 py-1 rounded border border-green-500/30 text-white font-mono text-[9px] z-10 flex items-center backdrop-blur-sm w-11/12 justify-center">
-                    <Users size={8} className="mr-1 text-green-500"/> {bets.TIE.toLocaleString()}
-                 </div>
-
+                 {/* MY BET DISPLAY (LARGE) */}
                  {myBets.TIE > 0 && (
-                     <div className="absolute top-1 right-1 bg-green-500 text-white px-1 rounded text-[8px] font-bold shadow-lg z-20">
-                         +{myBets.TIE}
+                     <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                         <div className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] stroke-black" style={{textShadow: '0 0 10px rgba(34, 197, 94, 0.8)'}}>
+                             {myBets.TIE}
+                         </div>
                      </div>
                  )}
+
+                 <div className="absolute bottom-2 bg-black/60 px-1 py-1 rounded border border-green-500/30 text-white font-mono text-[9px] z-10 flex items-center backdrop-blur-sm w-11/12 justify-center">
+                    <Users size={8} className="mr-1 text-green-500"/> {bets.TIE.toLocaleString()}
+                 </div>
              </div>
 
              {/* TIGER BOX */}
              <div 
                 onClick={() => placeBet('TIGER')}
-                className={`relative h-40 rounded-tr-2xl rounded-br-xl border-2 flex flex-col items-center justify-between py-2 cursor-pointer active:scale-95 transition-all overflow-hidden group
-                    ${winner === 'TIGER' ? 'border-yellow-500 bg-yellow-900/40' : 'border-yellow-600/40 bg-gradient-to-b from-yellow-950/80 to-black/80'}`}
+                className={`relative h-48 rounded-r-xl border-2 flex flex-col items-center justify-start pt-4 cursor-pointer active:scale-95 transition-all overflow-hidden group
+                    ${winner === 'TIGER' ? 'border-yellow-500 bg-yellow-900/60' : 'border-yellow-600/40 bg-gradient-to-b from-yellow-950/90 to-black/90'}`}
              >
                  <div className="absolute inset-0 z-0">
                      {visualChips.filter(c => c.target === 'TIGER').map(c => (
@@ -491,18 +498,21 @@ export default function GamePage() {
                      ))}
                  </div>
 
-                 <h2 className="text-yellow-100 font-black text-lg uppercase drop-shadow-md z-10 tracking-widest">Tiger</h2>
-                 <p className="text-yellow-400 text-xs font-black z-10 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm">1:2</p>
+                 <h2 className="text-yellow-100 font-black text-xl uppercase drop-shadow-md z-10 tracking-widest">Tiger</h2>
+                 <p className="text-yellow-400 text-xs font-black z-10 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm mt-1">1:2</p>
                  
-                 <div className="bg-black/60 px-2 py-1 rounded border border-yellow-500/30 text-white font-mono text-[10px] z-10 flex items-center backdrop-blur-sm w-11/12 justify-center">
-                    <Users size={8} className="mr-1 text-yellow-500"/> {bets.TIGER.toLocaleString()}
-                 </div>
-
+                 {/* MY BET DISPLAY (LARGE) */}
                  {myBets.TIGER > 0 && (
-                     <div className="absolute top-1 right-1 bg-green-500 text-white px-1.5 rounded-md text-[9px] font-bold shadow-lg z-20 border border-white/20">
-                         +{myBets.TIGER}
+                     <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                         <div className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] stroke-black" style={{textShadow: '0 0 10px rgba(234, 179, 8, 0.8)'}}>
+                             {myBets.TIGER}
+                         </div>
                      </div>
                  )}
+                 
+                 <div className="absolute bottom-2 bg-black/60 px-2 py-1 rounded border border-yellow-500/30 text-white font-mono text-[10px] z-10 flex items-center backdrop-blur-sm w-11/12 justify-center">
+                    <Users size={8} className="mr-1 text-yellow-500"/> {bets.TIGER.toLocaleString()}
+                 </div>
              </div>
          </div>
 

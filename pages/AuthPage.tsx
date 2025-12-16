@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthState } from '../types';
-import { loginUser, registerUser, resetPassword } from '../services/backend';
-import { Smartphone, Lock, User, ArrowRight, Loader2, Sparkles, Gift, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { loginUser, registerUser, resetPassword, sendMockOTP, verifyMockOTP, confirmPasswordReset } from '../services/backend';
+import { Smartphone, Lock, User, ArrowRight, Loader2, Sparkles, Gift, Eye, EyeOff, AlertTriangle, KeyRound, ChevronLeft, CheckCircle } from 'lucide-react';
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -12,6 +12,14 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // OTP State (Used for both Signup and Forgot Password)
+  const [otpView, setOtpView] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  
+  // Forgot Password State
+  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1); // 1=Mobile, 2=OTP, 3=NewPass
+  const [newPassword, setNewPassword] = useState('');
 
   // Form Data (Mobile Only)
   const [formData, setFormData] = useState({
@@ -54,7 +62,8 @@ export default function AuthPage() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  // STEP 1: Send OTP (Signup)
+  const handleRequestOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -73,6 +82,27 @@ export default function AuthPage() {
     }
 
     try {
+       await sendMockOTP(formData.mobile);
+       setOtpView(true); // Switch to OTP input
+       setSuccessMsg("OTP sent to your mobile number.");
+    } catch (err: any) {
+       setError(err.message);
+    } finally {
+       setLoading(false);
+    }
+  };
+
+  // STEP 2: Verify OTP & Register (Signup)
+  const handleVerifyAndRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      // 1. Verify OTP
+      await verifyMockOTP(formData.mobile, otpCode);
+
+      // 2. Register User
       await registerUser({
         name: formData.name,
         mobile: formData.mobile,
@@ -86,17 +116,58 @@ export default function AuthPage() {
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
+  // --- FORGOT PASSWORD FLOW ---
+
+  const handleForgot_Step1_SendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    if(!formData.mobile) {
-      setError("Please enter your mobile number first");
+    if(!formData.mobile || formData.mobile.length !== 11) {
+      setError("Please enter a valid 11-digit mobile number");
       return;
     }
     setLoading(true);
     try {
-      await resetPassword(formData.mobile);
-      setSuccessMsg("Reset info has been logged (Simulated SMS).");
-      setTimeout(() => setView('LOGIN'), 3000);
+      // Check if user exists and send OTP with reset flag
+      await sendMockOTP(formData.mobile, true); 
+      setSuccessMsg("OTP Sent via WhatsApp!");
+      setForgotStep(2);
+    } catch(err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgot_Step2_VerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await verifyMockOTP(formData.mobile, otpCode);
+      setSuccessMsg("Verified! Set new password.");
+      setForgotStep(3);
+    } catch(err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgot_Step3_ResetPass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if(newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await confirmPasswordReset(formData.mobile, newPassword);
+      setSuccessMsg("Password Reset Successfully!");
+      setTimeout(() => {
+        setView('LOGIN');
+        setForgotStep(1);
+        setOtpCode('');
+        setNewPassword('');
+        setFormData({...formData, password: ''});
+      }, 2000);
     } catch(err: any) {
       setError(err.message);
     } finally {
@@ -130,8 +201,8 @@ export default function AuthPage() {
           )}
           
           {successMsg && (
-            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/50 rounded-xl text-green-500 text-xs font-bold text-center">
-              {successMsg}
+            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/50 rounded-xl text-green-500 text-xs font-bold text-center flex items-center justify-center">
+               <CheckCircle size={16} className="mr-2" /> {successMsg}
             </div>
           )}
 
@@ -175,7 +246,17 @@ export default function AuthPage() {
                   </button>
                 </div>
                 <div className="text-right mt-2">
-                  <button type="button" onClick={() => setView('FORGOT_PASSWORD')} className="text-xs text-neonBlue hover:underline">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                        setView('FORGOT_PASSWORD');
+                        setForgotStep(1);
+                        setError('');
+                        setSuccessMsg('');
+                        setOtpCode('');
+                    }} 
+                    className="text-xs text-neonBlue hover:underline"
+                  >
                     Forgot Password?
                   </button>
                 </div>
@@ -198,8 +279,8 @@ export default function AuthPage() {
             </form>
           )}
 
-          {view === 'SIGNUP' && (
-            <form onSubmit={handleRegister} className="space-y-3 animate-fade-in">
+          {view === 'SIGNUP' && !otpView && (
+            <form onSubmit={handleRequestOTP} className="space-y-3 animate-fade-in">
               <div className="relative">
                 <User className="absolute left-3 top-3.5 text-slate-500" size={16} />
                 <input
@@ -268,7 +349,7 @@ export default function AuthPage() {
                 disabled={loading}
                 className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-slate-200 transition-all flex items-center justify-center mt-2"
               >
-                {loading ? <Loader2 className="animate-spin" /> : "Create Account"}
+                {loading ? <Loader2 className="animate-spin" /> : "Verify & Create Account"}
               </button>
 
               <div className="text-center mt-4">
@@ -279,39 +360,143 @@ export default function AuthPage() {
             </form>
           )}
 
+          {/* OTP VIEW (SIGNUP) */}
+          {view === 'SIGNUP' && otpView && (
+             <form onSubmit={handleVerifyAndRegister} className="space-y-6 animate-slide-up">
+                 <div className="text-center">
+                    <div className="w-16 h-16 bg-neonBlue/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-neonBlue/50 animate-pulse">
+                        <Smartphone className="text-neonBlue" size={32} />
+                    </div>
+                    <h3 className="text-white font-bold text-lg">Verify Mobile</h3>
+                    <p className="text-slate-400 text-sm mt-1">
+                        We sent a code to <br/><span className="text-neonBlue font-mono">{formData.mobile}</span>
+                    </p>
+                 </div>
+
+                 <div className="relative">
+                    <KeyRound className="absolute left-3 top-3.5 text-slate-500" size={18} />
+                    <input 
+                      type="number"
+                      placeholder="Enter 6-digit OTP"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 text-center text-white text-lg tracking-[0.5em] font-mono focus:border-neonBlue focus:outline-none"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.slice(0, 6))}
+                      required
+                    />
+                 </div>
+
+                 <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-neonBlue text-black font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all flex items-center justify-center"
+                 >
+                    {loading ? <Loader2 className="animate-spin" /> : "Confirm OTP"}
+                 </button>
+
+                 <button 
+                    type="button" 
+                    onClick={() => setOtpView(false)}
+                    className="w-full text-slate-500 text-xs flex items-center justify-center hover:text-white"
+                 >
+                     <ChevronLeft size={14} className="mr-1"/> Change Number
+                 </button>
+             </form>
+          )}
+
+          {/* --- FORGOT PASSWORD MULTI-STEP FLOW --- */}
           {view === 'FORGOT_PASSWORD' && (
             <div className="animate-fade-in text-center">
               <div className="w-16 h-16 bg-neonPurple/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-neonPurple/30">
                 <Lock className="text-neonPurple" size={32} />
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Reset Password</h2>
-              <p className="text-slate-400 text-xs mb-6">
-                Enter your mobile number. Contact admin if stuck.
-              </p>
+              
+              {/* Step Indicators */}
+              <div className="flex justify-center space-x-2 mb-6">
+                  <div className={`w-2 h-2 rounded-full ${forgotStep >= 1 ? 'bg-neonPurple' : 'bg-slate-800'}`}></div>
+                  <div className={`w-2 h-2 rounded-full ${forgotStep >= 2 ? 'bg-neonPurple' : 'bg-slate-800'}`}></div>
+                  <div className={`w-2 h-2 rounded-full ${forgotStep >= 3 ? 'bg-neonPurple' : 'bg-slate-800'}`}></div>
+              </div>
 
-              <form onSubmit={handleResetPassword} className="space-y-4">
-                <div className="relative">
-                  <Smartphone className="absolute left-3 top-3.5 text-slate-500" size={18} />
-                  <input
-                    name="mobile"
-                    type="tel"
-                    required
-                    placeholder="03XXXXXXXXX"
-                    value={formData.mobile}
-                    onChange={handleChange}
-                    maxLength={11}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 text-white focus:border-neonPurple focus:outline-none"
-                  />
-                </div>
+              {/* STEP 1: Enter Mobile */}
+              {forgotStep === 1 && (
+                  <form onSubmit={handleForgot_Step1_SendOTP} className="space-y-4 animate-fade-in">
+                    <p className="text-slate-400 text-xs mb-2">Enter your registered mobile number to receive OTP.</p>
+                    <div className="relative">
+                      <Smartphone className="absolute left-3 top-3.5 text-slate-500" size={18} />
+                      <input
+                        name="mobile"
+                        type="tel"
+                        required
+                        placeholder="03XXXXXXXXX"
+                        value={formData.mobile}
+                        onChange={handleChange}
+                        maxLength={11}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 text-white focus:border-neonPurple focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-neonPurple text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] transition-all flex items-center justify-center"
+                    >
+                       {loading ? <Loader2 className="animate-spin" /> : "Send OTP Code"}
+                    </button>
+                  </form>
+              )}
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-neonPurple text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] transition-all flex items-center justify-center"
-                >
-                   {loading ? <Loader2 className="animate-spin" /> : "Request Reset"}
-                </button>
-              </form>
+              {/* STEP 2: Verify OTP */}
+              {forgotStep === 2 && (
+                  <form onSubmit={handleForgot_Step2_VerifyOTP} className="space-y-4 animate-fade-in">
+                    <p className="text-slate-400 text-xs mb-2">Enter the OTP sent to <span className="text-neonPurple font-mono">{formData.mobile}</span></p>
+                    <div className="relative">
+                      <KeyRound className="absolute left-3 top-3.5 text-slate-500" size={18} />
+                      <input
+                        type="number"
+                        required
+                        placeholder="6-Digit Code"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.slice(0,6))}
+                        maxLength={6}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 text-center text-white text-lg tracking-[0.5em] font-mono focus:border-neonPurple focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-neonPurple text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center"
+                    >
+                       {loading ? <Loader2 className="animate-spin" /> : "Verify Code"}
+                    </button>
+                    <button type="button" onClick={() => setForgotStep(1)} className="text-xs text-slate-500">Change Number</button>
+                  </form>
+              )}
+
+              {/* STEP 3: New Password */}
+              {forgotStep === 3 && (
+                  <form onSubmit={handleForgot_Step3_ResetPass} className="space-y-4 animate-fade-in">
+                    <p className="text-slate-400 text-xs mb-2">Create a new secure password.</p>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3.5 text-slate-500" size={18} />
+                      <input
+                        type="text"
+                        required
+                        placeholder="New Password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 text-white focus:border-neonPurple focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-green-500 text-black font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all flex items-center justify-center"
+                    >
+                       {loading ? <Loader2 className="animate-spin" /> : "Update Password"}
+                    </button>
+                  </form>
+              )}
 
               <button onClick={() => setView('LOGIN')} className="mt-6 text-slate-500 text-xs hover:text-white">
                 Back to Login
